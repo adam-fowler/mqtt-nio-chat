@@ -2,6 +2,7 @@ import Foundation
 import Logging
 import MQTTNIO
 import NIO
+import Darwin
 
 struct MQTTChat {
     let command: MQTTChatCommand
@@ -23,7 +24,7 @@ struct MQTTChat {
             port: command.port,
             identifier: "MQTTNIOChat-\(command.username)",
             eventLoopGroupProvider: .shared(eventLoopGroup),
-            logger: self.logger
+            logger: nil//self.logger
         )
     }
     
@@ -44,7 +45,7 @@ struct MQTTChat {
         }
         
         self.mqttClient.addCloseListener(named: "CheckForClose") { result in
-            print("Lost connection")
+            outputAndReplacePrompt("Lost connection")
         }
     }
     
@@ -74,20 +75,39 @@ struct MQTTChat {
     func receiveMessage(_ buffer: ByteBuffer) {
         if let packet = try? JSONDecoder().decode(ChatPacket.self, from: buffer) {
             guard packet.from != command.username else { return }
-            print("\(packet.from): \(packet.message)")
+            outputAndReplacePrompt("\(packet.from): \(packet.message)")
         }
     }
     
     func run() throws {
-        print("Connecting to \(topicName)")
+        output("Connecting to \(topicName)")
         try setup(on: eventLoopGroup.next()).wait()
-        print("Connected to \(topicName)")
+        output("Connected to \(topicName)")
         while true {
-            while let line = readLine() {
+            prompt()
+            if let line = readLine() {
                 _ = self.sendMessage(line)
-                //print(mqttClient.pipeline!)
             }
         }
+    }
+
+    func deleteCurrentLine() {
+        fputs("\u{1b}[0G\u{1b}[K", stdout)
+    }
+
+    func output(_ string: String) {
+        fputs("\(string)\n", stdout)
+    }
+
+    func prompt() {
+        fputs("\(command.username): ", stdout)
+        fflush(stdout)
+    }
+
+    func outputAndReplacePrompt(_ string: String) {
+        deleteCurrentLine()
+        output(string)
+        prompt()
     }
 
     struct ChatPacket: Codable {
@@ -95,3 +115,4 @@ struct MQTTChat {
         let message: String
     }
 }
+
