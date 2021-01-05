@@ -52,12 +52,8 @@ struct MQTTChat {
     func setup(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
         // connect, subscribe and publish
         self.mqttClient.connect(cleanSession: false).flatMap { hasSession -> EventLoopFuture<Void> in
-            if !hasSession {
-                let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
-                return self.mqttClient.subscribe(to: [subscription])
-            } else {
-                return eventLoop.makeSucceededFuture(())
-            }
+            let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
+            return self.mqttClient.subscribe(to: [subscription])
         }
         .flatMap { _ in
             self.addListeners()
