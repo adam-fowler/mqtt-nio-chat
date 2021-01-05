@@ -4,9 +4,8 @@ import MQTTNIO
 import NIO
 import Darwin
 
-struct MQTTChat {
+struct MQTTChatClient {
     let command: MQTTChatCommand
-    let eventLoopGroup: EventLoopGroup
     let mqttClient: MQTTClient
     let topicName: String
     let logger: Logger = {
@@ -17,19 +16,42 @@ struct MQTTChat {
 
     init(command: MQTTChatCommand) {
         self.command = command
-        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.topicName = "MQTTNIOChat-\(self.command.topic)"
         self.mqttClient = MQTTClient(
             host: command.servername,
             port: command.port,
             identifier: "MQTTNIOChat-\(command.username)",
-            eventLoopGroupProvider: .shared(eventLoopGroup),
+            eventLoopGroupProvider: .createNew,
             logger: nil//self.logger
         )
     }
     
     func syncShutdown() throws {
         try self.mqttClient.syncShutdownGracefully()
+    }
+    
+    func run() throws {
+        print("Connecting to \(self.command.topic)")
+        try setup().wait()
+        print("Connected to \(self.command.topic)")
+        while true {
+            prompt()
+            if let line = readLine() {
+                _ = self.sendMessage(line)
+            }
+        }
+    }
+
+    func setup() -> EventLoopFuture<Void> {
+        // connect, subscribe and publish
+        self.mqttClient.connect(cleanSession: false).flatMap { hasSession -> EventLoopFuture<Void> in
+            let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
+            return self.mqttClient.subscribe(to: [subscription])
+        }
+        .flatMap { _ in
+            self.addListeners()
+            return self.sendMessage("Joined!")
+        }
     }
     
     func addListeners() {
@@ -43,24 +65,12 @@ struct MQTTChat {
                 }
             }
         }
-        
+
         self.mqttClient.addCloseListener(named: "CheckForClose") { result in
             outputAndReplacePrompt("Lost connection")
         }
     }
-    
-    func setup(on eventLoop: EventLoop) -> EventLoopFuture<Void> {
-        // connect, subscribe and publish
-        self.mqttClient.connect(cleanSession: false).flatMap { hasSession -> EventLoopFuture<Void> in
-            let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
-            return self.mqttClient.subscribe(to: [subscription])
-        }
-        .flatMap { _ in
-            self.addListeners()
-            return self.sendMessage("Joined!")
-        }
-    }
-    
+
     func sendMessage(_ message: String) -> EventLoopFuture<Void> {
         let packet = ChatPacket(from: command.username, message: message)
         var buffer = ByteBufferAllocator().buffer(capacity: 0)
@@ -75,18 +85,6 @@ struct MQTTChat {
         }
     }
     
-    func run() throws {
-        print("Connecting to \(topicName)")
-        try setup(on: eventLoopGroup.next()).wait()
-        print("Connected to \(topicName)")
-        while true {
-            prompt()
-            if let line = readLine() {
-                _ = self.sendMessage(line)
-            }
-        }
-    }
-
     func deleteCurrentLine() {
         print("\u{1b}[0G\u{1b}[K", terminator: "")
     }

@@ -15,7 +15,7 @@ struct MQTTChatCommand: ParsableCommand {
     var port: Int = 1883
 
     func run() throws {
-        try MQTTChat(command: self).run()
+        try MQTTChatClient(command: self).run()
     }
 }
 
