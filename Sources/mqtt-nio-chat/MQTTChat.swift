@@ -80,9 +80,9 @@ struct MQTTChat {
     }
     
     func run() throws {
-        output("Connecting to \(topicName)")
+        print("Connecting to \(topicName)")
         try setup(on: eventLoopGroup.next()).wait()
-        output("Connected to \(topicName)")
+        print("Connected to \(topicName)")
         while true {
             prompt()
             if let line = readLine() {
@@ -92,21 +92,17 @@ struct MQTTChat {
     }
 
     func deleteCurrentLine() {
-        fputs("\u{1b}[0G\u{1b}[K", stdout)
-    }
-
-    func output(_ string: String) {
-        fputs("\(string)\n", stdout)
+        print("\u{1b}[0G\u{1b}[K", terminator: "")
     }
 
     func prompt() {
-        fputs("\(command.username): ", stdout)
+        print("\(command.username): ", terminator: "")
         fflush(stdout)
     }
 
     func outputAndReplacePrompt(_ string: String) {
         deleteCurrentLine()
-        output(string)
+        print(string)
         prompt()
     }
 
