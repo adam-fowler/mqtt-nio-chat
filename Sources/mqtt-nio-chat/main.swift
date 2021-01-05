@@ -8,9 +8,8 @@ struct MQTTChatCommand: ParsableCommand {
     var username: String
 
     @Option(name: .shortAndLong, help: "Server name")
-    //var servername: String = "localhost"
-    //var servername: String = "test.mosquitto.org"
-    var servername: String = "broker.hivemq.com"
+    var servername: String = "localhost"
+    //var servername: String = "broker.hivemq.com"
 
     @Option(name: .shortAndLong, help: "Server port")
     var port: Int = 1883
