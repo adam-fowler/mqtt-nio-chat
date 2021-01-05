@@ -61,7 +61,7 @@ struct MQTTChat {
         }
         .flatMap { _ in
             self.addListeners()
-            return self.sendMessage("Joined! Say Hello!")
+            return self.sendMessage("Joined!")
         }
     }
     
