@@ -4,6 +4,11 @@ import MQTTNIO
 import NIO
 import Darwin
 
+struct MQTTChatClientError: Error, CustomStringConvertible {
+    let message: String
+    var description: String { message }
+}
+
 struct MQTTChatClient {
     let command: MQTTChatCommand
     let mqttClient: MQTTClient
@@ -13,6 +18,7 @@ struct MQTTChatClient {
         logger.logLevel = .trace
         return logger
     }()
+    let closePromise: EventLoopPromise<Void>
 
     init(command: MQTTChatCommand) {
         self.command = command
@@ -24,6 +30,7 @@ struct MQTTChatClient {
             eventLoopGroupProvider: .createNew,
             logger: nil//self.logger
         )
+        self.closePromise = mqttClient.eventLoopGroup.next().makePromise()
     }
     
     func syncShutdown() throws {
@@ -32,19 +39,37 @@ struct MQTTChatClient {
     
     func run() throws {
         print("Connecting to \(self.command.topic)")
-        try setup().wait()
-        print("Connected to \(self.command.topic)")
-        while true {
-            prompt()
-            if let line = readLine() {
-                _ = self.sendMessage(line)
+        let setupFuture = setup()
+        setupFuture.cascadeFailure(to: closePromise)
+        setupFuture.whenSuccess { _ in
+            print("Connected to \(self.command.topic)")
+            DispatchQueue.global().async {
+                while true {
+                    self.prompt()
+                    if let line = readLine() {
+                        _ = self.sendMessage(line)
+                    }
+                }
             }
+
+        }
+
+        do {
+            // wait on closePromise
+            try self.closePromise.futureResult.wait()
+
+            // disconnect and shutdown
+            try self.mqttClient.disconnect().wait()
+            try self.mqttClient.syncShutdownGracefully()
+        } catch {
+            deleteCurrentLine()
+            print("Error: \(error)")
         }
     }
 
     func setup() -> EventLoopFuture<Void> {
-        // connect, subscribe and publish
-        self.mqttClient.connect(cleanSession: false).flatMap { hasSession -> EventLoopFuture<Void> in
+        // connect, subscribe and publish joined message
+        self.mqttClient.connect(cleanSession: true).flatMap { hasSession -> EventLoopFuture<Void> in
             let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
             return self.mqttClient.subscribe(to: [subscription])
         }
@@ -57,8 +82,8 @@ struct MQTTChatClient {
     func addListeners() {
         self.mqttClient.addPublishListener(named: "ListenForChat") { result in
             switch result {
-            case .failure:
-                break
+            case .failure(let error):
+                self.closePromise.fail(error)
             case .success(let publishInfo):
                 if publishInfo.topicName == self.topicName {
                     receiveMessage(publishInfo.payload)
@@ -67,7 +92,7 @@ struct MQTTChatClient {
         }
 
         self.mqttClient.addCloseListener(named: "CheckForClose") { result in
-            outputAndReplacePrompt("Lost connection")
+            self.closePromise.fail(MQTTChatClientError(message: "Lost connection"))
         }
     }
 
