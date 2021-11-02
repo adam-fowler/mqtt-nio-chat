@@ -71,7 +71,7 @@ struct MQTTChatClient {
         // connect, subscribe and publish joined message
         self.mqttClient.connect(cleanSession: true).flatMap { hasSession -> EventLoopFuture<Void> in
             let subscription = MQTTSubscribeInfo(topicFilter: self.topicName, qos: .exactlyOnce)
-            return self.mqttClient.subscribe(to: [subscription])
+            return self.mqttClient.subscribe(to: [subscription]).map { _ in }
         }
         .flatMap { _ in
             self.addListeners()

@@ -10,7 +10,7 @@ let package = Package(
         .executable(name: "MQTTNIOChat", targets: ["mqtt-nio-chat"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/adam-fowler/mqtt-nio.git", .branch("main")),
+        .package(url: "https://github.com/adam-fowler/mqtt-nio.git", from: "2.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "0.3.0"),
     ],
     targets: [
